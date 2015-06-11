@@ -18,6 +18,9 @@ except ImportError:
 
 import pyd.support
 
+ip = get_ipython()
+_loaded = False
+
 @magics_class
 class PydMagics(Magics):
     def __init__(self, shell):
@@ -120,6 +123,9 @@ class PydMagics(Magics):
     @property
     def so_ext(self):
         return ".so"   #TODO: Do this properly
-        
-ip = get_ipython()
-ip.register_magics(PydMagics)
+
+def load_ipython_extension(ip):
+    global _loaded
+    if not _loaded:
+        ip.register_magics(PydMagics)
+        _loaded = True
