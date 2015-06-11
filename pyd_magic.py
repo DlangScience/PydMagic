@@ -18,7 +18,6 @@ except ImportError:
 
 import pyd.support
 
-ip = get_ipython()
 _loaded = False
 
 @magics_class
