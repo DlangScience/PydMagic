@@ -16,6 +16,9 @@ try:
 except ImportError:
     import md5 as hashlib
 
+from distutils.core import Distribution
+from distutils.command.build_ext import build_ext
+
 import pyd.support
 
 _loaded = False
