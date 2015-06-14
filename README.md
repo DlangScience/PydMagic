@@ -39,4 +39,4 @@ extern(C) void PydMain() {
 ```
 and run. After it has finished building, your extension should be automatically imported and ready to use. Builds are cached just like with cython magic.
 
-This code is heavily based on and partially verbatim from the the '''%%cython''' magic implementation.
+This code is heavily based on and partially verbatim from the the ```%%cython``` magic implementation.
