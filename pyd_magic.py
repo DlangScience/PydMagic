@@ -229,5 +229,8 @@ class PydMagics(Magics):
         build_extension.finalize_options()
         return build_extension
         
-ip = get_ipython()
-ip.register_magics(PydMagics)
+def load_ipython_extension(ip):
+    global _loaded
+    if not _loaded:
+        ip.register_magics(PydMagics)
+        _loaded = True
