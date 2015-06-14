@@ -1,3 +1,28 @@
+from IPython.core import magic_arguments
+from IPython.core.magic import cell_magic, magics_class, Magics
+from IPython.utils.path import get_ipython_cache_dir
+from IPython.utils import py3compat
+import sys
+import os
+import io
+import time
+import imp
+
+sys.stdout.errors = ''
+sys.stderr.errors = ''
+
+try:
+    import hashlib
+except ImportError:
+    import md5 as hashlib
+
+from distutils.core import Distribution
+from distutils.command.build_ext import build_ext
+
+import pyd.support
+
+_loaded = False
+
 _uda_support = r"""
 import pyd.pyd;
 
