@@ -5,7 +5,7 @@ The very basics, nothing pretty so far. Depends on pyd (https://github.com/ariov
 
 To install, just enter
 ```
-%install_ext https://raw.githubusercontent.com/debjan/ipython-recipes-magic/master/recipes.py
+%install_ext https://raw.githubusercontent.com/DlangScience/PydMagic/master/pyd_magic.py
 ```
 in any ipython instance.
 
