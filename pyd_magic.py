@@ -121,7 +121,36 @@ class PydMagics(Magics):
             
     @property
     def so_ext(self):
-        return ".so"   #TODO: Do this properly
+        """The extension suffix for compiled modules."""
+        try:
+            return self._so_ext
+        except AttributeError:
+            self._so_ext = self._get_build_extension().get_ext_filename('')
+            return self._so_ext
+        
+    def _clear_distutils_mkpath_cache(self):
+        """clear distutils mkpath cache
+        prevents distutils from skipping re-creation of dirs that have been removed
+        """
+        try:
+            from distutils.dir_util import _path_created
+        except ImportError:
+            pass
+        else:
+            _path_created.clear()
+        
+    def _get_build_extension(self):
+        self._clear_distutils_mkpath_cache()
+        dist = Distribution()
+        config_files = dist.find_config_files()
+        try:
+            config_files.remove('setup.cfg')
+        except ValueError:
+            pass
+        dist.parse_config_files(config_files)
+        build_extension = build_ext(dist)
+        build_extension.finalize_options()
+        return build_extension
 
 def load_ipython_extension(ip):
     global _loaded
