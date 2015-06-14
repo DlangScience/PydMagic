@@ -1,27 +1,73 @@
-from IPython.core import magic_arguments
-from IPython.core.magic import cell_magic, magics_class, Magics
-from IPython.utils.path import get_ipython_cache_dir
-from IPython.utils import py3compat
-import sys
-import os
-import io
-import time
-import imp
+_uda_support = r"""
+import pyd.pyd;
 
-sys.stdout.errors = ''
-sys.stderr.errors = ''
+struct pdef(Args ...){}
 
-try:
-    import hashlib
-except ImportError:
-    import md5 as hashlib
+/*
+ * With the builtin alias declaration, you cannot declare
+ * aliases of, for example, literal values. You can alias anything
+ * including literal values via this template.
+ */
+// symbols and literal values
+template Alias(alias a)
+{
+    static if (__traits(compiles, { alias x = a; }))
+        alias Alias = a;
+    else static if (__traits(compiles, { enum x = a; }))
+        enum Alias = a;
+    else
+        static assert(0, "Cannot alias " ~ a.stringof);
+}
+// types and tuples
+template Alias(a...)
+{
+    alias Alias = a;
+}
 
-from distutils.core import Distribution
-from distutils.command.build_ext import build_ext
+unittest
+{
+    enum abc = 1;
+    static assert(__traits(compiles, { alias a = Alias!(123); }));
+    static assert(__traits(compiles, { alias a = Alias!(abc); }));
+    static assert(__traits(compiles, { alias a = Alias!(int); }));
+    static assert(__traits(compiles, { alias a = Alias!(1,abc,int); }));
+}
 
-import pyd.support
-
-_loaded = False
+extern(C) void PydMain()
+{
+    import std.traits;
+    import std.typetuple : Arguments = TypeTuple;
+    alias thisModule = Alias!(__traits(parent, PydMain));
+    foreach(mem; __traits(allMembers, thisModule))
+    {
+        //pragma(msg, mem);
+        static if(mixin(`isCallable!`~mem))
+        {
+            //pragma(msg, "callable");
+            foreach(ol; __traits(getOverloads, thisModule, mem))
+            {
+                //pragma(msg, "overload ");
+                alias attrs = Arguments!(__traits(getAttributes, ol));
+                foreach(attr; attrs)
+                {
+                    //pragma(msg, "attributes:");
+                    //pragma(msg, attr);
+                    static if(is(attr == pdef!Args, Args...))
+                    {
+                        //pragma(msg, "Args:");
+                        //pragma(msg, Args);
+                        def!(ol, Args)();
+                    }
+                }
+            }
+        }
+    }
+    static if(__traits(hasMember, thisModule, "preInit"))
+        preInit();
+    module_init();
+    static if(__traits(hasMember, thisModule, "postInit"))
+        postInit();
+}"""
 
 @magics_class
 class PydMagics(Magics):
@@ -78,7 +124,10 @@ class PydMagics(Magics):
     @cell_magic
     def pyd(self, line, cell):
         args = magic_arguments.parse_argstring(self.pyd, line)
-        code = cell if cell.endswith('\n') else cell+'\n'
+        code = _uda_support + cell
+        code = code if code.endswith('\n') else code+'\n'
+        
+    
         lib_dir = os.path.join(get_ipython_cache_dir(), 'pyd')
         key = code, line, sys.version_info, sys.executable
         
@@ -93,7 +142,7 @@ class PydMagics(Magics):
         if args.name:
             module_name = py3compat.unicode_to_str(args.name)
         else:
-            module_name = "_cython_magic_" + hashlib.md5(str(key).encode('utf-8')).hexdigest()
+            module_name = "_pyd_magic_" + hashlib.md5(str(key).encode('utf-8')).hexdigest()
         module_path = os.path.join(lib_dir, module_name + self.so_ext)
 
         have_module = os.path.isfile(module_path)
@@ -154,9 +203,6 @@ class PydMagics(Magics):
         build_extension = build_ext(dist)
         build_extension.finalize_options()
         return build_extension
-
-def load_ipython_extension(ip):
-    global _loaded
-    if not _loaded:
-        ip.register_magics(PydMagics)
-        _loaded = True
+        
+ip = get_ipython()
+ip.register_magics(PydMagics)
