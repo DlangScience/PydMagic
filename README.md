@@ -16,7 +16,7 @@ To use, first enter
 
 then write your pyd extension in a cell marked with ```%%pyd``` e.g.
 
-```
+```D
 %%pyd
 
 @pdef!() string hello() {
