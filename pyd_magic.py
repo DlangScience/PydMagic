@@ -21,8 +21,6 @@ from distutils.command.build_ext import build_ext
 
 import pyd.support
 
-_loaded = False
-
 _uda_support = r"""
 import pyd.pyd;
 
@@ -230,7 +228,4 @@ class PydMagics(Magics):
         return build_extension
         
 def load_ipython_extension(ip):
-    global _loaded
-    if not _loaded:
-        ip.register_magics(PydMagics)
-        _loaded = True
+    ip.register_magics(PydMagics)
