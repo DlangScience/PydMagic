@@ -23,77 +23,6 @@ import pyd.support
 
 _loaded = False
 
-_uda_support = r"""
-import pyd.pyd;
-
-struct pdef(Args ...){}
-
-/*
- * With the builtin alias declaration, you cannot declare
- * aliases of, for example, literal values. You can alias anything
- * including literal values via this template.
- */
-// symbols and literal values
-template Alias(alias a)
-{
-    static if (__traits(compiles, { alias x = a; }))
-        alias Alias = a;
-    else static if (__traits(compiles, { enum x = a; }))
-        enum Alias = a;
-    else
-        static assert(0, "Cannot alias " ~ a.stringof);
-}
-// types and tuples
-template Alias(a...)
-{
-    alias Alias = a;
-}
-
-unittest
-{
-    enum abc = 1;
-    static assert(__traits(compiles, { alias a = Alias!(123); }));
-    static assert(__traits(compiles, { alias a = Alias!(abc); }));
-    static assert(__traits(compiles, { alias a = Alias!(int); }));
-    static assert(__traits(compiles, { alias a = Alias!(1,abc,int); }));
-}
-
-extern(C) void PydMain()
-{
-    import std.traits;
-    import std.typetuple : Arguments = TypeTuple;
-    alias thisModule = Alias!(__traits(parent, PydMain));
-    foreach(mem; __traits(allMembers, thisModule))
-    {
-        //pragma(msg, mem);
-        static if(mixin(`isCallable!`~mem))
-        {
-            //pragma(msg, "callable");
-            foreach(ol; __traits(getOverloads, thisModule, mem))
-            {
-                //pragma(msg, "overload ");
-                alias attrs = Arguments!(__traits(getAttributes, ol));
-                foreach(attr; attrs)
-                {
-                    //pragma(msg, "attributes:");
-                    //pragma(msg, attr);
-                    static if(is(attr == pdef!Args, Args...))
-                    {
-                        //pragma(msg, "Args:");
-                        //pragma(msg, Args);
-                        def!(ol, Args)();
-                    }
-                }
-            }
-        }
-    }
-    static if(__traits(hasMember, thisModule, "preInit"))
-        preInit();
-    module_init();
-    static if(__traits(hasMember, thisModule, "postInit"))
-        postInit();
-}"""
-
 @magics_class
 class PydMagics(Magics):
     def __init__(self, shell):
@@ -148,8 +77,13 @@ class PydMagics(Magics):
     
     @cell_magic
     def pyd(self, line, cell):
+        
         args = magic_arguments.parse_argstring(self.pyd, line)
-        code = _uda_support + cell
+        code = 'import pyd.pyd, pyd_wrap;\n\n\
+                extern(C) void PydMain()\n{\n   \
+                registerAll!(Alias!(__traits(parent, PydMain)))();\n\
+                }\n\n'\
+                + cell
         code = code if code.endswith('\n') else code+'\n'
         
     
@@ -179,7 +113,7 @@ class PydMagics(Magics):
             pyd_file = py3compat.cast_bytes_py2(pyd_file, encoding=sys.getfilesystemencoding())
             with io.open(pyd_file, 'w', encoding='utf-8') as f:
                 f.write(code)
-            extension = pyd.support.Extension(module_name, [pyd_file],
+            extension = pyd.support.Extension(module_name, [pyd_file, 'pyd_wrap.d'],
                 include_dirs = d_include_dirs,
                 library_dirs = args.library_dirs,
                 extra_compile_args = args.compile_args,
