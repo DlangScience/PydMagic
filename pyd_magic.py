@@ -67,7 +67,7 @@ class PydMagics(Magics):
              "see http://code.dlang.org/package-format#version-specs"
     )
     @magic_arguments.argument(
-        '--dub_config', action='store', default={},
+        '--dub_config', action='store', default='{}',
         help='''add your own compilation flags, dependencies etc. as json '''
              '''to be merged with dub.json e.g. {"libs":"fftw3"}. Note '''
              '''that spaces will be interpreted as starting a new argument, '''
