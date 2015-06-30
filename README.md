@@ -1,7 +1,7 @@
 # PydMagic
 Ipython/Jupyter magic for inline D code in a python notebook
 
-Liable to change. Depends on pyd (https://github.com/ariovistus/pyd) and mergedict (https://pypi.python.org/pypi/mergedict)
+Liable to change. Depends on pyd (https://github.com/ariovistus/pyd), mergedict (https://pypi.python.org/pypi/mergedict) and dub (http://code.dlang.org)
 
 To install, just enter
 ```
