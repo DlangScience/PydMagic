@@ -188,7 +188,12 @@ class PydMagics(Magics):
             with io.open(pyd_dub_file, 'w', encoding='utf-8') as f:
                 f.write(json.dumps(pyd_dub_json)+'\n')
 
-            subprocess.check_call(["dub", "-v", "build", "--root=" + lib_dir] + args.dub_args.split(' '))
+            try:
+                output = subprocess.check_output(["dub", "build", "--root=" + lib_dir] + args.dub_args.split(' '),
+                        universal_newlines=True, stderr=subprocess.STDOUT)
+            except (subprocess.CalledProcessError) as e:
+                print(e.output)
+                raise e
             
         if not have_module:
             self._code_cache[key] = module_name
