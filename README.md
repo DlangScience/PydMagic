@@ -46,7 +46,6 @@ struct S
 {
     @pdef!() string bleep = "bloop7";
     @pdef!() int bar(int w) { return w * 42; }
-    @pdef!() T t;
 }
 ```
 and run. After it has finished building, your extension should be automatically imported and ready to use. Builds are cached just like with cython magic. Some basic flags are supported as arguments to ```%%pyd``` such as ```--dub_args```, run ```%%pyd?``` for more info
