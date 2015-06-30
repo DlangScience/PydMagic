@@ -53,7 +53,7 @@ class PydMagics(Magics):
     )
     @magic_arguments.argument(
         '--compiler', action='store', default='dmd',
-        help="Specify the D compiler to be used. Default is DMD"
+        help="Specify the D compiler to be used. Default is dmd"
     )
     @magic_arguments.argument(
         '--compiler_type', action='store', default='dmd',
@@ -68,12 +68,15 @@ class PydMagics(Magics):
     )
     @magic_arguments.argument(
         '--dub_config', action='store', default={},
-        help="add your own compilation flags, dependencies etc. as json "
-             "to be merged with dub.json e.g. { 'libs': 'fftw3' }. "
+        help='''add your own compilation flags, dependencies etc. as json '''
+             '''to be merged with dub.json e.g. {"libs":"fftw3"}. Note '''
+             '''that spaces will be interpreted as starting a new argument, '''
+             '''If you want spaces in your argument, wrap it in a string'''
     )
     @magic_arguments.argument(
         '--dub_args', action='store', default='',
-        help="command line flags to dub"
+        help="command line flags to dub. wrap in a string if you want to list "
+             "multiple arguments."
     )
     
     @cell_magic
@@ -88,11 +91,23 @@ class PydMagics(Magics):
         code = code if code.endswith('\n') else code+'\n'
         
         key = code, line, sys.version_info, sys.executable
-        
+
+        try:
+            args.dub_config = json.loads(args.dub_config)
+        except:
+            args.dub_config = json.loads(ast.literal_eval(args.dub_config))
+            pass
+
+        try:
+            args.dub_args = ast.literal_eval(args.dub_args)
+        except:
+            pass
+
         if args.force:
             # Force a new module name by adding the current time to the
             # key which is hashed to determine the module name.
-            key += time.time()
+            key += (time.time(),)
+            args.dub_args = '--force ' + args.dub_args
             
         if args.name:
             module_name = py3compat.unicode_to_str(args.name)
@@ -168,12 +183,7 @@ class PydMagics(Magics):
             pyd_dub_json['sourceFiles'].append(mainTemplateOut)
 
             pyd_dub_json = ConfigDict(pyd_dub_json)
-            try:
-                config = json.loads(args.dub_config)
-            except:
-                config = json.loads(ast.literal_eval(args.dub_config))
-                pass    
-            pyd_dub_json.merge(config)
+            pyd_dub_json.merge(args.dub_config)
 
             with io.open(pyd_dub_file, 'w', encoding='utf-8') as f:
                 f.write(json.dumps(pyd_dub_json)+'\n')
