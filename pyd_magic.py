@@ -7,9 +7,12 @@ import os
 import io
 import time
 import imp
+import json
+import subprocess
+import shutil
+import ast
 
-sys.stdout.errors = ''
-sys.stderr.errors = ''
+from mergedict import ConfigDict
 
 try:
     import hashlib
@@ -20,79 +23,6 @@ from distutils.core import Distribution
 from distutils.command.build_ext import build_ext
 
 import pyd.support
-
-_loaded = False
-
-_uda_support = r"""
-import pyd.pyd;
-
-struct pdef(Args ...){}
-
-/*
- * With the builtin alias declaration, you cannot declare
- * aliases of, for example, literal values. You can alias anything
- * including literal values via this template.
- */
-// symbols and literal values
-template Alias(alias a)
-{
-    static if (__traits(compiles, { alias x = a; }))
-        alias Alias = a;
-    else static if (__traits(compiles, { enum x = a; }))
-        enum Alias = a;
-    else
-        static assert(0, "Cannot alias " ~ a.stringof);
-}
-// types and tuples
-template Alias(a...)
-{
-    alias Alias = a;
-}
-
-unittest
-{
-    enum abc = 1;
-    static assert(__traits(compiles, { alias a = Alias!(123); }));
-    static assert(__traits(compiles, { alias a = Alias!(abc); }));
-    static assert(__traits(compiles, { alias a = Alias!(int); }));
-    static assert(__traits(compiles, { alias a = Alias!(1,abc,int); }));
-}
-
-extern(C) void PydMain()
-{
-    import std.traits;
-    import std.typetuple : Arguments = TypeTuple;
-    alias thisModule = Alias!(__traits(parent, PydMain));
-    foreach(mem; __traits(allMembers, thisModule))
-    {
-        //pragma(msg, mem);
-        static if(mixin(`isCallable!`~mem))
-        {
-            //pragma(msg, "callable");
-            foreach(ol; __traits(getOverloads, thisModule, mem))
-            {
-                //pragma(msg, "overload ");
-                alias attrs = Arguments!(__traits(getAttributes, ol));
-                foreach(attr; attrs)
-                {
-                    //pragma(msg, "attributes:");
-                    //pragma(msg, attr);
-                    static if(is(attr == pdef!Args, Args...))
-                    {
-                        //pragma(msg, "Args:");
-                        //pragma(msg, Args);
-                        def!(ol, Args)();
-                    }
-                }
-            }
-        }
-    }
-    static if(__traits(hasMember, thisModule, "preInit"))
-        preInit();
-    module_init();
-    static if(__traits(hasMember, thisModule, "postInit"))
-        postInit();
-}"""
 
 @magics_class
 class PydMagics(Magics):
@@ -108,28 +38,8 @@ class PydMagics(Magics):
         
     @magic_arguments.magic_arguments()
     @magic_arguments.argument(
-        '-c', '--compile-args', action='append', default=[],
-        help="Extra flags to pass to compiler via the `extra_compile_args` "
-             "Extension flag (can be specified  multiple times)."
-    )
-    @magic_arguments.argument(
-        '--link-args', action='append', default=[],
-        help="Extra flags to pass to linker via the `extra_link_args` "
-             "Extension flag (can be specified  multiple times)."
-    )
-    @magic_arguments.argument(
-        '-l', '--lib', action='append', default=[],
-        help="Add a library to link the extension against (can be specified "
-             "multiple times)."
-    )
-    @magic_arguments.argument(
         '-n', '--name',
         help="Specify a name for the Pyd module."
-    )
-    @magic_arguments.argument(
-        '-L', dest='library_dirs', metavar='dir', action='append', default=[],
-        help="Add a path to the list of libary directories (can be specified "
-             "multiple times)."
     )
     @magic_arguments.argument(
         '-I', '--include', action='append', default=[],
@@ -145,19 +55,39 @@ class PydMagics(Magics):
         '--compiler', action='store', default='dmd',
         help="Specify the D compiler to be used. Default is DMD"
     )
+    @magic_arguments.argument(
+        '--compiler_type', action='store', default='dmd',
+        help="Specify the compiler type, as in dmd, gdc, ldc or sdc. Needed if "
+             "you are using a non-standard compiler name e.g. dmd_HEAD for your"
+             "own personal build of dmd from git master HEAD"
+    )
+    @magic_arguments.argument(
+        '--pyd_version', action='store', default='>=0.9.7',
+        help="Specify the pyd version to use, as a dub version specifier "
+             "see http://code.dlang.org/package-format#version-specs"
+    )
+    @magic_arguments.argument(
+        '--dub_config', action='store', default={},
+        help="add your own compilation flags, dependencies etc. as json "
+             "to be merged with dub.json e.g. { 'libs': 'fftw3' }. "
+    )
+    @magic_arguments.argument(
+        '--dub_args', action='store', default='',
+        help="command line flags to dub"
+    )
     
     @cell_magic
     def pyd(self, line, cell):
+        
         args = magic_arguments.parse_argstring(self.pyd, line)
-        code = _uda_support + cell
+        code = 'import ppyd;\n\n\
+                extern(C) void PydMain()\n{\n   \
+                registerAll!(Alias!(__traits(parent, PydMain)))();\n\
+                }\n\n'\
+                + cell
         code = code if code.endswith('\n') else code+'\n'
         
-    
-        lib_dir = os.path.join(get_ipython_cache_dir(), 'pyd')
         key = code, line, sys.version_info, sys.executable
-        
-        if not os.path.exists(lib_dir):
-            os.makedirs(lib_dir)
         
         if args.force:
             # Force a new module name by adding the current time to the
@@ -168,7 +98,17 @@ class PydMagics(Magics):
             module_name = py3compat.unicode_to_str(args.name)
         else:
             module_name = "_pyd_magic_" + hashlib.md5(str(key).encode('utf-8')).hexdigest()
-        module_path = os.path.join(lib_dir, module_name + self.so_ext)
+
+        lib_dir = os.path.join(get_ipython_cache_dir(), 'pyd', module_name)
+        
+        if not os.path.exists(lib_dir):
+            os.makedirs(lib_dir)
+
+        if os.name == 'nt':
+            so_ext = '.dll'
+        else:
+            so_ext = '.so' #might have to go to dylib on OS X at some point???
+        module_path = os.path.join(lib_dir, 'lib' + module_name + so_ext)
 
         have_module = os.path.isfile(module_path)
         need_pydize = not have_module
@@ -179,16 +119,66 @@ class PydMagics(Magics):
             pyd_file = py3compat.cast_bytes_py2(pyd_file, encoding=sys.getfilesystemencoding())
             with io.open(pyd_file, 'w', encoding='utf-8') as f:
                 f.write(code)
-            extension = pyd.support.Extension(module_name, [pyd_file],
-                include_dirs = d_include_dirs,
-                library_dirs = args.library_dirs,
-                extra_compile_args = args.compile_args,
-                extra_link_args = args.link_args,
-                libraries = args.lib,
-                build_deimos=True,
-                d_lump=True
-            )
-            pyd.support.setup(ext_modules=[extension],script_name="setup.py",script_args=["build", "--build-lib", lib_dir, "-q", "--compiler="+args.compiler])
+                
+            pyd_dub_file = os.path.join(lib_dir, 'dub.json')
+            pyd_dub_file = py3compat.cast_bytes_py2(pyd_dub_file, encoding=sys.getfilesystemencoding())
+
+            pyd_dub_json = json.loads('{}')
+            pyd_dub_json['name'] = module_name
+            pyd_dub_json['dependencies'] = { "pyd": args.pyd_version, "ppyd": ">=0.1.0" }
+            pyd_dub_json['subConfigurations'] = { "pyd": "python{0}{1}".format(sys.version_info.major, sys.version_info.minor) }
+            pyd_dub_json['sourceFiles'] = [pyd_file]
+            pyd_dub_json['targetType'] = 'dynamicLibrary'
+            pyd_dub_json['dflags'] = ['-fPIC']
+            pyd_dub_json['libs'] = ['phobos2']
+
+            with io.open(pyd_dub_file, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(pyd_dub_json)+'\n')
+            try:
+                os.remove(os.path.join(lib_dir, 'dub.selections.json'))
+            except:
+                pass
+
+            dub_desc = json.loads(subprocess.check_output(["dub", "describe", "--root=" + lib_dir], universal_newlines = True))
+            for pack in dub_desc['packages']:
+                if pack['name'] == 'pyd':
+                    _infraDir = os.path.join(pack['path'], 'infrastructure')
+                    break
+
+            if os.name == 'nt':
+                boilerplatePath = os.path.join(_infraDir, 'd',
+                        'python_dll_windows_boilerplate.d'
+                        )
+            else:
+                boilerplatePath = os.path.join(_infraDir, 'd',
+                        'python_so_linux_boilerplate.d'
+                        )
+            pyd_dub_json['sourceFiles'].append(boilerplatePath)
+
+            if args.compiler == 'dmd':
+                so_ctor_path = os.path.join(_infraDir, 'd', 'so_ctor.c')
+                so_ctor_object_path = os.path.join(lib_dir, "so_ctor.o")
+                subprocess.check_call(['cc', "-c", "-fPIC", "-o" + so_ctor_object_path, so_ctor_path])
+                pyd_dub_json['sourceFiles'].append(so_ctor_object_path)
+
+            mainTemplate = os.path.join(_infraDir, 'd', 'pydmain_template.d')
+            mainTemplateOut = os.path.join(lib_dir, 'pydmain.d')
+            with io.open(mainTemplate, 'r', encoding='utf-8') as t, io.open(mainTemplateOut, 'w', encoding='utf-8') as m:
+                m.write(t.read() % {'modulename' : module_name})
+            pyd_dub_json['sourceFiles'].append(mainTemplateOut)
+
+            pyd_dub_json = ConfigDict(pyd_dub_json)
+            try:
+                config = json.loads(args.dub_config)
+            except:
+                config = json.loads(ast.literal_eval(args.dub_config))
+                pass    
+            pyd_dub_json.merge(config)
+
+            with io.open(pyd_dub_file, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(pyd_dub_json)+'\n')
+
+            subprocess.check_call(["dub", "-v", "build", "--root=" + lib_dir] + args.dub_args.split(' '))
             
         if not have_module:
             self._code_cache[key] = module_name
@@ -196,41 +186,5 @@ class PydMagics(Magics):
         module = imp.load_dynamic(module_name, module_path)
         self._import_all(module)
             
-    @property
-    def so_ext(self):
-        """The extension suffix for compiled modules."""
-        try:
-            return self._so_ext
-        except AttributeError:
-            self._so_ext = self._get_build_extension().get_ext_filename('')
-            return self._so_ext
-        
-    def _clear_distutils_mkpath_cache(self):
-        """clear distutils mkpath cache
-        prevents distutils from skipping re-creation of dirs that have been removed
-        """
-        try:
-            from distutils.dir_util import _path_created
-        except ImportError:
-            pass
-        else:
-            _path_created.clear()
-        
-    def _get_build_extension(self):
-        self._clear_distutils_mkpath_cache()
-        dist = Distribution()
-        config_files = dist.find_config_files()
-        try:
-            config_files.remove('setup.cfg')
-        except ValueError:
-            pass
-        dist.parse_config_files(config_files)
-        build_extension = build_ext(dist)
-        build_extension.finalize_options()
-        return build_extension
-        
 def load_ipython_extension(ip):
-    global _loaded
-    if not _loaded:
-        ip.register_magics(PydMagics)
-        _loaded = True
+    ip.register_magics(PydMagics)
