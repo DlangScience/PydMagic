@@ -48,9 +48,12 @@ struct S
     @pdef!() int bar(int w) { return w * 42; }
 }
 ```
-and run. After it has finished building, your extension should be automatically imported and ready to use. Builds are cached just like with cython magic. Some basic flags are supported as arguments to ```%%pyd``` such as ```--dub_args```, run ```%%pyd?``` for more info
+and run. After it has finished building, your extension should be automatically imported and ready to use. Builds are cached just like with cython magic. Some basic flags are supported as arguments to ```%%pyd``` such as ```--dub_args```, run ```%%pyd?``` for more info.
 
 The ```pdef``` UDA instructs the extension to wrap the function/type/member for use in python. It takes any template arguments that pyd.pyd.def takes.
+
+### dub integration
+Adding a dependency on a dub package or any other part of a ```dub.json``` is as easy as ```%%pyd --dub_config={"dependencies":{"someDubPackage":"~>1.2.5"}}``` and command line arguments to dub can similarly by added with ```--dub_args```. See ```%%pyd?``` for more info.
 
 PydMagic provides its own PydMain, so you can't define your own. You can, however, define 2 functions ```preInit()``` and ```postInit()```, which PydMagic will call before and after calling pyd's ```module_init()``` respectively. You can use this to manually wrap functions, types, anything else pyd supports.
 
