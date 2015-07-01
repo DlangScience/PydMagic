@@ -5,50 +5,76 @@ Liable to change. Depends on pyd (https://github.com/ariovistus/pyd), mergedict 
 
 To install, just enter
 ```
-%install_ext https://raw.githubusercontent.com/DlangScience/PydMagic/master/pyd_magic.py
+in [1]: %install_ext https://raw.githubusercontent.com/DlangScience/PydMagic/master/pyd_magic.py
 ```
 in any ipython instance.
 
 To use, first enter
 ```
-%load_ext pyd_magic
+in [2]: %load_ext pyd_magic
 ```
 
 then write your pyd extension in a cell marked with ```%%pyd``` e.g.
 
 ```D
-%%pyd
+in [3]: %%pyd
 
-@pdef!() string hello() {
-    return "Hello World!";
-}
+        @pdef!() string hello() {
+            return "Hello World!";
+        }
 
-@pdef!(Docstring!"takes a single int, returns that int converted to a string")
-string intToStr(int b)
-{
-    import std.conv;
-    return b.to!string;
-}
+        @pdef!(Docstring!"takes a single int, returns that int converted to a string")
+        string intToStr(int b)
+        {
+            import std.conv;
+            return b.to!string;
+        }
 
-@pdef!(PyName!"binary_zebra") int zebra()
-{
-    return 101010101;
-}
+        @pdef!(PyName!"binary_zebra") int zebra()
+        {
+            return 101010101;
+        }
 
-@pdef!() long[] whereExactlyIntegral(float[] data)
-{
-    import std.algorithm, std.array;
-    return data.filter!(x => x == cast(long)x).map!(x => cast(long)x).array;
-}
+        @pdef!() long[] whereExactlyIntegral(double[] data)
+        {
+            import std.algorithm, std.array;
+            return data.filter!(x => x == cast(long)x).map!(x => cast(long)x).array;
+        }
 
-@pdef!()
-struct S
-{
-    @pdef!() string bleep = "bloop7";
-    @pdef!() int bar(int w) { return w * 42; }
-}
+        @pdef!()
+        struct S
+        {
+            @pdef!() string bleep = "bloop";
+            @pdef!() int bar(int w) { return w * 42; }
+        }
 ```
-and run. After it has finished building, your extension should be automatically imported and ready to use. Builds are cached just like with cython magic. Some basic flags are supported as arguments to ```%%pyd``` such as ```--dub_args```, run ```%%pyd?``` for more info.
+and run. After it has finished building, your extension should be automatically imported and ready to use, like so:
+
+```
+in [4]: hello()
+out[4]: 'Hello World!'
+
+in [5]: intToStr(435)
+out[5]: '435'
+
+in [6]: whereExactlyIntegral([3.0, 2.4, 7.0, 1.001])
+out[6]: [3, 7]
+
+in [7]: s = S();
+        s.bleep
+out[7]: 'bloop'
+
+in [8]: s.bleep = 'blah'
+        s.bleep
+out[8]: 'blah'
+
+in [9]: s.bar(2)
+out[9]: 84
+```
+
+see ```examples/test.ipynb``` for an example using numpy arrays.
+
+Builds are cached just like with cython magic. Some basic flags are supported as arguments to ```%%pyd``` such as ```--dub_args```, run ```%%pyd?``` for more info.
 
 The ```pdef``` UDA instructs the extension to wrap the function/type/member for use in python. It takes any template arguments that pyd.pyd.def takes.
 
