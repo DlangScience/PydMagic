@@ -148,7 +148,7 @@ class PydMagics(Magics):
 
             pyd_dub_json = json.loads('{}')
             pyd_dub_json['name'] = module_name
-            pyd_dub_json['dependencies'] = { "pyd": args.pyd_version, "ppyd": ">=0.1.1" }
+            pyd_dub_json['dependencies'] = { "pyd": args.pyd_version, "ppyd": ">=0.1.2" }
             pyd_dub_json['subConfigurations'] = { "pyd": "python{0}{1}".format(sys.version_info.major, sys.version_info.minor) }
             pyd_dub_json['sourceFiles'] = [pyd_file]
             pyd_dub_json['targetType'] = 'dynamicLibrary'
