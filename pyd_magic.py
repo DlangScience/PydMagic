@@ -78,6 +78,11 @@ class PydMagics(Magics):
         help="command line flags to dub. wrap in a string if you want to list "
              "multiple arguments."
     )
+    @magic_arguments.argument(
+        '--print_compiler_output', action='store_true',
+        help="Print the output from the compilation process, even if compilation "
+             "runs sucessfully"
+    )
     
     @cell_magic
     def pyd(self, line, cell):
@@ -137,6 +142,9 @@ class PydMagics(Magics):
                 
             pyd_dub_file = os.path.join(lib_dir, 'dub.json')
             pyd_dub_file = py3compat.cast_bytes_py2(pyd_dub_file, encoding=sys.getfilesystemencoding())
+            pyd_dub_selections_file = os.path.join(lib_dir, 'dub.selections.json')
+            pyd_dub_selections_file = py3compat.cast_bytes_py2(pyd_dub_selections_file, encoding=sys.getfilesystemencoding())
+
 
             pyd_dub_json = json.loads('{}')
             pyd_dub_json['name'] = module_name
@@ -146,11 +154,12 @@ class PydMagics(Magics):
             pyd_dub_json['targetType'] = 'dynamicLibrary'
             pyd_dub_json['dflags'] = ['-fPIC']
             pyd_dub_json['libs'] = ['phobos2']
+            pyd_dub_json['versions'] = ['PydPythonExtension']
 
             with io.open(pyd_dub_file, 'w', encoding='utf-8') as f:
-                f.write(json.dumps(pyd_dub_json)+'\n')
+                f.write(unicode(json.dumps(pyd_dub_json)+'\n', encoding='utf-8'))
             try:
-                os.remove(os.path.join(lib_dir, 'dub.selections.json'))
+                os.remove(pyd_dub_selections_file)
             except:
                 pass
 
@@ -177,7 +186,9 @@ class PydMagics(Magics):
                 pyd_dub_json['sourceFiles'].append(so_ctor_object_path)
 
             mainTemplate = os.path.join(_infraDir, 'd', 'pydmain_template.d')
+            mainTemplate = py3compat.cast_bytes_py2(mainTemplate, encoding=sys.getfilesystemencoding())
             mainTemplateOut = os.path.join(lib_dir, 'pydmain.d')
+            mainTemplateOut = py3compat.cast_bytes_py2(mainTemplateOut, encoding=sys.getfilesystemencoding())
             with io.open(mainTemplate, 'r', encoding='utf-8') as t, io.open(mainTemplateOut, 'w', encoding='utf-8') as m:
                 m.write(t.read() % {'modulename' : module_name})
             pyd_dub_json['sourceFiles'].append(mainTemplateOut)
@@ -186,7 +197,7 @@ class PydMagics(Magics):
             pyd_dub_json.merge(args.dub_config)
 
             with io.open(pyd_dub_file, 'w', encoding='utf-8') as f:
-                f.write(json.dumps(pyd_dub_json)+'\n')
+                f.write(unicode(json.dumps(pyd_dub_json)+'\n', encoding='utf-8'))
 
             try:
                 output = subprocess.check_output(["dub", "build", "--root=" + lib_dir] + args.dub_args.split(' '),
@@ -194,6 +205,8 @@ class PydMagics(Magics):
             except (subprocess.CalledProcessError) as e:
                 print(e.output)
                 raise e
+            if args.print_compiler_output:
+                print(output)
             
         if not have_module:
             self._code_cache[key] = module_name
