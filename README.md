@@ -3,6 +3,8 @@ Ipython/Jupyter magic for inline D code in a python notebook
 
 Liable to change. Depends on pyd (https://github.com/ariovistus/pyd), mergedict (https://pypi.python.org/pypi/mergedict) and dub (http://code.dlang.org)
 
+Example on colab: [<img src="https://colab.research.google.com/assets/colab-badge.svg" align="center">](https://colab.research.google.com/github/DlangScience/PydMagic/blob/master/examples/colab_example.ipynb)
+
 To install, just enter
 ```
 in [1]: %install_ext https://raw.githubusercontent.com/DlangScience/PydMagic/master/pyd_magic.py
